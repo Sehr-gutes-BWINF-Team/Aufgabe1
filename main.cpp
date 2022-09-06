@@ -17,10 +17,6 @@ using namespace std;
 #define ENCODING_UTF16LE    2
 #define ENCODING_UTF16BE    3
 
-wstring removeExcessiveSpaces(wstring &in);
-
-wstring removeLineBreaks(wstring &in);
-
 // https://gist.github.com/VeryCrazyDog/c20b2cb83896e9975d22
 std::string readFile(std::string path) {
     std::string result;

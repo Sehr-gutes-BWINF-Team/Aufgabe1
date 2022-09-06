@@ -2,12 +2,12 @@
 #include <fstream>
 #include <string>
 #include <cstdio>
-#include <sstream>
 #include <locale>
 #include <codecvt>
 #include <io.h>
 #include <fcntl.h>
 #include <vector>
+#include <regex>
 
 using namespace std;
 
@@ -81,205 +81,73 @@ std::wstring get_content(string name) {
     return utf16LeContent;
 }
 
-wstring removeSpecialCharacters(wstring &in) {
-    wstring formatted;
-    for (const auto &item: in) {
-        if (item == L'»') {
-            continue;
-        }
-        if (item == L'«') {
-            continue;
-        }
-        if (item == L'[') {
-            continue;
-        }
-        if (item == L']') {
-            continue;
-        }
-        if (item == L'(') {
-            continue;
-        }
-        if (item == L')') {
-            continue;
-        }
-        if (item == L',') {
-            continue;
-        }
-        if (item == L'.') {
-            continue;
-        }
-        if (item == L':') {
-            continue;
-        }
-        if (item == L';') {
-            continue;
-        }
-        if (item == L'?') {
-            continue;
-        }
-        if (item == L'!') {
-            continue;
-        }
-        if (item == L'-') {
-            continue;
-        }
-        if (item == L'_') {
-            continue;
-        }
-        if (item == L'\'') {
-            continue;
-        }
-        formatted.push_back(item);
+wstring clean(wstring &in) {
+    wstring clean;
+    wregex whitespaces(L"\\s{2,}|\\n");
+    clean = regex_replace(in, whitespaces, L" ", std::regex_constants::match_any);
+    wregex anyotherchars(L"[[:punct:]]");
+    clean = regex_replace(clean, anyotherchars, L"", std::regex_constants::match_any);
+    return clean;
+}
+
+template<typename Out>
+void split(const std::wstring &s, wchar_t delim, Out result) {
+    std::wistringstream iss(s);
+    std::wstring item;
+    while (getline(iss, item, delim)) {
+        *result++ = item;
     }
-    return formatted;
 }
 
-wstring format(wstring in) {
-    wstring formatted = removeLineBreaks(in);
-    formatted = removeExcessiveSpaces(formatted);
-    formatted = removeSpecialCharacters(formatted);
+std::vector<std::wstring> split(const std::wstring &s, char delim) {
+    std::vector<std::wstring> elems;
+    split(s, delim, std::back_inserter(elems));
 
-    return formatted;
 
+    return elems;
 }
 
+wstring generateRegex(wstring &in) {
+    in = in.substr(0, in.length() - 1); // Weil end of file char
 
-wstring removeLineBreaks(wstring &in) {
-    wstring formatted;
-    for (const auto &item: in) {
-        if (item == '\n') {
-            formatted.push_back(' ');
+    const wstring wordprefix = L"(";
+    const wstring wordsuffix = L")\\W+";
+    const wstring wildcart = L"([^\\s]+)\\W+";
+
+    vector<wstring> list = split(in, L' ');
+    wstring regex = L"";
+    for (const auto &item: list) {
+        // wcout << item;
+        if (item[0] == L'_') {
+            regex.append(wildcart);
             continue;
         }
-        if (item == '\r') continue;
-        formatted.push_back(item);
+        regex.append(wordprefix);
+        regex.append(item);
+        regex.append(wordsuffix);
     }
-    return formatted;
-}
-
-wstring removeExcessiveSpaces(wstring &in) {
-    wstring formatted;
-    wchar_t c = 'x';
-    for (const auto &item: in) {
-        if (item == ' ' && c == ' ') {
-            c = item;
-            continue;
-        }
-        c = item;
-        formatted.push_back(item);
-    }
-    return formatted;
-}
-
-wstring removeAllSpaces(const wstring &in) {
-    wstring formatted;
-    for (wchar_t i: in) {
-        if (i == ' ') continue;
-        formatted.push_back(i);
-    }
-    return formatted;
-}
-
-// https://stackoverflow.com/a/37454181
-vector<wstring> split(const wstring &str, const wstring &delim) {
-    vector<wstring> tokens;
-    size_t prev = 0, pos;
-    do {
-        pos = str.find(delim, prev);
-        wstring token = str.substr(prev, pos - prev);
-        if (!token.empty()) tokens.push_back(token);
-        prev = pos + delim.length();
-    } while (pos < str.length() && prev < str.length());
-    return tokens;
-}
-
-bool equals(wstring &a, wstring &b) {
-    a = removeAllSpaces(a);
-    b = removeAllSpaces(b);
-    if (a.length() != b.length()) return false;
-    for (int i = 0; i < a.length(); ++i) {
-        if (a[i] != b[i]) {
-            return false;
-        }
-    }
-    return true;
-}
-
-wstring to_lower(wstring s) {
-    wstring out;
-    for (const auto &item: s) {
-        out.push_back(tolower(item));
-    }
-    return out;
-}
-
-bool valid(vector<wstring> target, vector<wstring> current) {
-    int i = 0;
-    for (int k = 0; k < target.size(); ++k) {
-        wstring a = target[k];
-        if (a[0] == L'_') continue;
-        wstring b = current[k];
-        if (!equals(a, b)) {
-            if (i > 1) {
-                wcout << "|" << a << "!=" << b << "|";
-            }
-            return false;
-        }
-        i++;
-
-
-        if (i >= 2) {
-            wcout << "\n";
-            // wcout << a << " != " << b << " ";
-            for (const auto &item: current) {
-                wcout << item << " ";
-            }
-            wcout << "\n";
-        }
-
-    }
-    return true;
+    // wcout << regex << endl;
+    return regex;
 }
 
 int main() {
     _setmode(_fileno(stdout), _O_U8TEXT);
-    wstring inputBook = get_content("Alice_im_Wunderland.txt");
-    wstring book = format(inputBook);
-    wstring inputStoerung = get_content("stoerung0.txt");
-    vector<wstring> inputSplit = split(inputStoerung, L" ");
-    vector<wstring> bookSplit = split(book, L" ");
-    vector<wstring> cleanInputSplit;
-    for (const auto &item: inputSplit) {
-        cleanInputSplit.push_back(removeAllSpaces(item));
+    wstring book = get_content("Alice_im_Wunderland.txt");
+    book = clean(book);
+    // wcout << book;
+    wstring stoerung = get_content("stoerung5.txt");
+    wstring reg = generateRegex(stoerung);
+    // wcout << reg;
+    wregex word_regex(reg, std::regex_constants::icase);
+
+    auto words_begin = std::wsregex_iterator(book.begin(), book.end(), word_regex, std::regex_constants::match_any);
+    auto words_end = std::wsregex_iterator();
+
+    for (std::wsregex_iterator i = words_begin; i != words_end; ++i) {
+        std::wsmatch match = *i;
+        std::wstring match_str = match.str();
+        wcout << match_str << endl;
     }
-    int size = inputSplit.size();
-
-    vector<vector<wstring>> out;
-
-    for (int i = 0; i < bookSplit.size() - size; ++i) {
-        vector<wstring> list;
-        for (int j = 0; j < size; ++j) {
-            list.push_back(to_lower(bookSplit[i + j]));
-        }
-
-        if (valid(cleanInputSplit, list)) {
-            out.push_back(list);
-        }
-    }
-    wcout << "Input: ";
-    for (const auto &item: cleanInputSplit) {
-        wcout << item << " ";
-    }
-    wcout << "\n";
-    wcout << "Results: ";
-
-    for (const auto &item: out) {
-        for (const auto &i: item) {
-            wcout << i << " ";
-        }
-        wcout << "\n";
-    }
-
 
     return 0;
 }
